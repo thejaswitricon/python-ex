@@ -20,14 +20,15 @@ jobs:
         token: ${{ secrets.GH_PAT }}
         fetch-depth: 0
 
+    - name: Install Python
+      run: |
+        sudo apt-get update
+        sudo apt-get install python
 
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: 3.x
-
-    - name: Install Python 3
-      run: sudo apt-get update && sudo apt-get install python3
+        python-version: '3.x'
 
     - name: Install dependencies
       run: |
