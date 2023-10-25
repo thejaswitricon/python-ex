@@ -1,0 +1,59 @@
+name: Update dynamic dashboards
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  statuses: write
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GH_PAT }}
+        fetch-depth: 0
+
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.x
+
+    - name: Install Python 3
+      run: sudo apt-get update && sudo apt-get install python3
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests  
+
+    - name: Set up environment
+      run: |
+        echo "NEW_RELIC_API_KEY=${{ secrets.NEW_RELIC_API_KEY }}" >> $GITHUB_ENV
+        echo "NEW_RELIC_ACCOUNT_ID=${{ secrets.NEW_RELIC_ACCOUNT_ID}}" >> $GITHUB_ENV
+
+    - name: Generate CSV files for dynamic dashboards
+      run: cd lib && python monitors-data-retrival.py
+
+    - name: Get Current Date
+      id: date
+      run: echo "::set-output name=date::$(date +'%Y%m%d')"    
+
+    - name: Create Pull Request
+      id: cpr
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GH_PAT }}
+        commit-message: 'fix(dashboards): update dynamic dashboard datasets'
+        committer: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+        author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+        signoff: false
+        branch: fix-dynamic-dashboards-data-${{ steps.date.outputs.date }}
+        title: 'fix(dashboards): update dynamic dashboard datasets'
