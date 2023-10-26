@@ -20,6 +20,9 @@ jobs:
         token: ${{ secrets.GH_PAT }}
         fetch-depth: 0
 
+    - name: Install Terraform
+      uses: hashicorp/setup-terraform@v1
+
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
