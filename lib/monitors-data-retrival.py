@@ -84,33 +84,33 @@ if os.path.exists(data_csv_file):
                     service_names.append(row["serviceName"])
 
         # Fetch monitors and update CSV file with monitor IDs
-        # for monitor_types in ["SIMPLE", "CERT_CHECK", "SCRIPT_API", "SCRIPT_BROWSER", "BROWSER"]:
-        #     monitors = fetch_monitors_by_type(monitor_types)
-        #     for monitor in monitors:
-        #         for service_name in service_names:
-        #             if monitor["name"].startswith(service_name):
-        #                 parts = monitor["name"].split()
-        #                 if len(parts) > 1:
-        #                     service_hash = parts[-1]
-        #                     if service_hash.startswith("#"):
-        #                         with open(destination_file, mode="r", encoding="utf-8") as csv_file:
-        #                             csv_reader = csv.DictReader(csv_file)
-        #                             data = list(csv_reader)
-        #                             for row in data:
-        #                                 if row["serviceName"] == service_name:
-        #                                     if row["rowType"] != "product":
-        #                                         if "#health" in parts and "#ping" in parts and "#critical" in parts:
-        #                                             row["healthMonitorId"] = monitor["id"]
-        #                                         elif "#ping" in parts and "#critical" in parts:
-        #                                             row["pingMonitorId"] = monitor["id"]
-        #                                     elif "#script" in parts and "#critical" in parts:
-        #                                         row["scriptMonitorId"] = monitor["id"]
-        #                         with open(destination_file, mode="w", newline="", encoding="utf-8") as csv_file:
-        #                             fieldnames = data[0].keys()
-        #                             csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        #                             csv_writer.writeheader()
-        #                             csv_writer.writerows(data)
-        #                         break
+        for monitor_types in ["SIMPLE", "CERT_CHECK", "SCRIPT_API", "SCRIPT_BROWSER", "BROWSER"]:
+            monitors = fetch_monitors_by_type(monitor_types)
+            for monitor in monitors:
+                for service_name in service_names:
+                    if monitor["name"].startswith(service_name):
+                        parts = monitor["name"].split()
+                        if len(parts) > 1:
+                            service_hash = parts[-1]
+                            if service_hash.startswith("#"):
+                                with open(destination_file, mode="r", encoding="utf-8") as csv_file:
+                                    csv_reader = csv.DictReader(csv_file)
+                                    data = list(csv_reader)
+                                    for row in data:
+                                        if row["serviceName"] == service_name:
+                                            if row["rowType"] != "product":
+                                                if "#health" in parts and "#ping" in parts and "#critical" in parts:
+                                                    row["healthMonitorId"] = monitor["id"]
+                                                elif "#ping" in parts and "#critical" in parts:
+                                                    row["pingMonitorId"] = monitor["id"]
+                                            elif "#script" in parts and "#critical" in parts:
+                                                row["scriptMonitorId"] = monitor["id"]
+                                with open(destination_file, mode="w", newline="", encoding="utf-8") as csv_file:
+                                    fieldnames = data[0].keys()
+                                    csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+                                    csv_writer.writeheader()
+                                    csv_writer.writerows(data)
+                                break
 
         # Updating Entity GUIDs and Application_id
 
@@ -232,6 +232,8 @@ if os.path.exists(data_csv_file):
                 print("Terraform format check complete.")
 
                 # Run terraform validate to check the configuration's validity
+                subprocess.run(['terraform', 'init', '-input=false', '-backend=false'], check=True)  # nosec
+                time.sleep(5)
                 validate_process = subprocess.run(['terraform', 'validate'], capture_output=True, text=True, check=False)  # nosec
                 if validate_process.returncode == 0:
                     print("Terraform validation successful.")
@@ -240,13 +242,12 @@ if os.path.exists(data_csv_file):
                     print(validate_process.stdout)
                     print(validate_process.stderr)
 
-                subprocess.run(['terraform', 'init', '-input=false', '-backend=false'], check=True)  # nosec
-
                 time.sleep(5)
-                apply_process = subprocess.run(['terraform', 'apply', '-auto-approve', '-input=false'], capture_output=True, text=True, shell=True, check=True)  # nosec
+                apply_process = subprocess.run(['terraform', 'apply', '-auto-approve', '-input=false'], capture_output=True, text=True,  check=False)  # nosec
+                time.sleep(5)
                 if apply_process.returncode == 0:
                     apply_output = apply_process.stdout
-                    print("Terraform apply successful")
+                    # print(apply_output)
 
                     def remove_ansi_escape_codes(text):
                         """
@@ -256,7 +257,6 @@ if os.path.exists(data_csv_file):
                         return ansi_escape.sub('', text)
 
                     clean_apply_output = remove_ansi_escape_codes(apply_output)
-                    print(clean_apply_output)
 
                     # Define a re pattern to match the content after "0 destroyed.\n\nOutputs:\n\n"
                     PATTERN = r'0 destroyed\.\n\nOutputs:\n\n([\s\S]*)'
@@ -265,12 +265,11 @@ if os.path.exists(data_csv_file):
                     match = re.search(PATTERN, clean_apply_output)
 
                     if match:
-                        TF_OUTPUTS = match.group(1)
+                        tf_outputs = match.group(1)
                     else:
-                        TF_OUTPUTS = "No TF_OUTPUTS found."
-                #pass TF_OUTPUTS to the function
-                print(TF_OUTPUTS)
-                update_entity_guids_csv(TF_OUTPUTS)
+                        tf_outputs = "No tf_outputs found."
+                #pass tf_outputs to the function
+                update_entity_guids_csv(tf_outputs)
 
                 if os.path.exists('terraform.tfstate'):
                     os.remove('terraform.tfstate')
@@ -278,177 +277,176 @@ if os.path.exists(data_csv_file):
                 if os.path.exists('terraform.tfstate.backup'):
                     os.remove('terraform.tfstate.backup')
 
-                # if os.path.exists('data.tf'):
-                #     os.remove('data.tf')
+                if os.path.exists('data.tf'):
+                    os.remove('data.tf')
 
             else:
                 print("No matching application names found")
 
         # Updating Browser Entity GUIDs
 
-#         def fetch_browser_names(filter_name, browser_offset):
-#             """
-#                 fetch browser apps through api call
-#             """
-#             params = {
-#                 "filter[name]": filter_name,
-#                 "offset": browser_offset,
-#                 "limit": PAGE_SIZE
-#             }
+        def fetch_browser_names(filter_name, browser_offset):
+            """
+                fetch browser apps through api call
+            """
+            params = {
+                "filter[name]": filter_name,
+                "offset": browser_offset,
+                "limit": PAGE_SIZE
+            }
 
-#             response = requests.get(BROWSER_APPS_API_ENDPOINT, headers=headers, params=params, timeout=20)
+            response = requests.get(BROWSER_APPS_API_ENDPOINT, headers=headers, params=params, timeout=20)
 
-#             if response.status_code == 200:
-#                 applications_data = response.json().get("browser_applications")
-#                 return applications_data
-#             else:
-#                 print(f"Failed to retrieve application names for filter: {filter_name}")
-#                 return []
+            if response.status_code == 200:
+                applications_data = response.json().get("browser_applications")
+                return applications_data
+            else:
+                print(f"Failed to retrieve application names for filter: {filter_name}")
+                return []
 
-#         def update_browser_guids_csv(browser_TF_OUTPUTS):
-#             """
-#                 Updates the csv file with browser entity_guid
-#             """
-#            # Regular expression pattern
-#             browser_pattern = r'([^=]+)\s*=\s*"([^"]+)"'
+        def update_browser_guids_csv(browser_tf_outputs):
+            """
+                Updates the csv file with browser entity_guid
+            """
+           # Regular expression pattern
+            browser_pattern = r'([^=]+)\s*=\s*"([^"]+)"'
 
-#             # Use re.findall to find all key-value pairs
-#             key_value_pairs = re.findall(browser_pattern, browser_TF_OUTPUTS)
-#             updated_rows = []
-#             # Iterate through the rows in the CSV file
-#             with open(destination_file, 'r', encoding="utf-8") as csvfile:
-#                 browser_reader = csv.DictReader(csvfile)
-#                 for browser_row in browser_reader:
-#                     browser_service_name = browser_row.get('serviceName', '')
-#                     updated_row = browser_row.copy()
-#                     # Iterate through the keys in TF_OUTPUTS
-#                     for key, value in key_value_pairs:
-#                         if browser_service_name == key.strip():
-#                             updated_row['browserEntityGuid'] = value.strip() if browser_row["rowType"] == "service" else ""
-#                     updated_rows.append(updated_row)
+            # Use re.findall to find all key-value pairs
+            key_value_pairs = re.findall(browser_pattern, browser_tf_outputs)
+            updated_rows = []
+            # Iterate through the rows in the CSV file
+            with open(destination_file, 'r', encoding="utf-8") as csvfile:
+                browser_reader = csv.DictReader(csvfile)
+                for browser_row in browser_reader:
+                    browser_service_name = browser_row.get('serviceName', '')
+                    updated_row = browser_row.copy()
+                    # Iterate through the keys in tf_outputs
+                    for key, value in key_value_pairs:
+                        if browser_service_name == key.strip():
+                            updated_row['browserEntityGuid'] = value.strip() if browser_row["rowType"] == "service" else ""
+                    updated_rows.append(updated_row)
 
-#             with open(destination_file, 'w', newline='', encoding="utf-8") as csvfile:
-#                 browser_fieldnames = updated_rows[0].keys()
-#                 writer = csv.DictWriter(csvfile, fieldnames=browser_fieldnames)
-#                 writer.writeheader()
-#                 writer.writerows(updated_rows)
+            with open(destination_file, 'w', newline='', encoding="utf-8") as csvfile:
+                browser_fieldnames = updated_rows[0].keys()
+                writer = csv.DictWriter(csvfile, fieldnames=browser_fieldnames)
+                writer.writeheader()
+                writer.writerows(updated_rows)
 
-#         if __name__ == "__main__":
-#             matching_browser_guid = {}
+        if __name__ == "__main__":
+            matching_browser_guid = {}
 
-#             with open(destination_file, mode="r", encoding="utf-8") as file:
-#                 reader = csv.DictReader(file)
-#                 for row in reader:
-#                     service_name = row.get("serviceName")
-#                     row_type = row.get("rowType")
-#                     if service_name and row_type == "service":
-#                         OFFSET = 0
-#                         while True:
-#                             browser_data = fetch_browser_names(service_name, OFFSET)
-#                             if not browser_data:
-#                                 break
+            with open(destination_file, mode="r", encoding="utf-8") as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    service_name = row.get("serviceName")
+                    row_type = row.get("rowType")
+                    if service_name and row_type == "service":
+                        OFFSET = 0
+                        while True:
+                            browser_data = fetch_browser_names(service_name, OFFSET)
+                            if not browser_data:
+                                break
 
-#                             for app_data in browser_data:
-#                                 app_name = app_data.get("name")
-#                                 if service_name != "pj-asc-dashboard-api":
-#                                     if service_name.lower() == app_name.lower():
-#                                         matching_browser_guid[app_name] = None
-#                                         print(f"Matching application found: {app_name}")
+                            for app_data in browser_data:
+                                app_name = app_data.get("name")
+                                if service_name != "pj-asc-dashboard-api":
+                                    if service_name.lower() == app_name.lower():
+                                        matching_browser_guid[app_name] = None
+                                        print(f"Matching application found: {app_name}")
 
-#                             if len(browser_data) < PAGE_SIZE:
-#                                 break
+                            if len(browser_data) < PAGE_SIZE:
+                                break
 
-#                             OFFSET += PAGE_SIZE
+                            OFFSET += PAGE_SIZE
 
-#         if matching_browser_guid:
-#             with open("data.tf", "w", encoding="utf-8") as tf_file:
-#                 tf_file.write('''
-#     # Terraform data blocks
-#     ''')
-#                 for idx, service_name in enumerate(matching_browser_guid, start=1):
-#                     tf_config = f'''
-#     data "newrelic_entity" "app_{idx}" {{
-#     name = "{service_name}"
-#     domain = "BROWSER"
-#     }}
-#     '''
-#                     tf_output_config = f'''
-#     output "{service_name}" {{
-#     value = data.newrelic_entity.app_{idx}.guid
-#     }}
-#     '''
-#                 tf_file.write(tf_config)
-#                 tf_file.write('\n')
-#                 tf_file.write(tf_output_config)  # Adding output configuration
-#                 tf_file.write('\n')
-#                 print(f"Terraform configuration and output added for Browser Application: {service_name}")
+        if matching_browser_guid:
+            with open("data.tf", "w", encoding="utf-8") as tf_file:
+                tf_file.write('''
+    # Terraform data blocks
+    ''')
+                for idx, service_name in enumerate(matching_browser_guid, start=1):
+                    tf_config = f'''
+    data "newrelic_entity" "app_{idx}" {{
+    name = "{service_name}"
+    domain = "BROWSER"
+    }}
+    '''
+                    tf_output_config = f'''
+    output "{service_name}" {{
+    value = data.newrelic_entity.app_{idx}.guid
+    }}
+    '''
+                tf_file.write(tf_config)
+                tf_file.write('\n')
+                tf_file.write(tf_output_config)  # Adding output configuration
+                tf_file.write('\n')
+                print(f"Terraform configuration and output added for Browser Application: {service_name}")
 
-#             # Read the content of provider.tf and data.tf
-#             with open(PROVIDER_TF_PATH, "r", encoding="utf-8") as provider_file, open(DATA_TF_PATH, "r", encoding="utf-8") as data_file:
-#                 provider_content = provider_file.read()
-#                 data_content = data_file.read()
+            # Read the content of provider.tf and data.tf
+            with open(PROVIDER_TF_PATH, "r", encoding="utf-8") as provider_file, open(DATA_TF_PATH, "r", encoding="utf-8") as data_file:
+                provider_content = provider_file.read()
+                data_content = data_file.read()
 
-#             # Concatenate the content of provider.tf and data.tf with provider.tf content first
-#             combined_content = provider_content + data_content
+            # Concatenate the content of provider.tf and data.tf with provider.tf content first
+            combined_content = provider_content + data_content
 
-#             # Write the combined content back to data.tf
-#             with open(DATA_TF_PATH, "w", encoding="utf-8") as data_file:
-#                 data_file.write(combined_content)
+            # Write the combined content back to data.tf
+            with open(DATA_TF_PATH, "w", encoding="utf-8") as data_file:
+                data_file.write(combined_content)
 
-#             print("Terraform configurations written to data.tf")
+            print("Terraform configurations written to data.tf")
             
-#             # Run terraform fmt to format the configuration file
-#             subprocess.run(['terraform', 'fmt'], check=True)  # nosec
-#             print("Terraform format check complete.")
+            # Run terraform fmt to format the configuration file
+            subprocess.run(['terraform', 'fmt'], check=True)  # nosec
+            print("Terraform format check complete.")
+            subprocess.run(['terraform', 'init', '-input=false', '-backend=false'], check=True)  # nosec
+            # Run terraform validate to check the configuration's validity
+            validate_process = subprocess.run(['terraform', 'validate'], capture_output=True, text=True, check=False)  # nosec  
+            if validate_process.returncode == 0:
+                print("Terraform validation successful.")
+            else:
+                print("Terraform validation failed:")
+                print(validate_process.stdout)
+                print(validate_process.stderr)
 
-#             # Run terraform validate to check the configuration's validity
-#             validate_process = subprocess.run(['terraform', 'validate'], capture_output=True, text=True, check=False)  # nosec  
-#             if validate_process.returncode == 0:
-#                 print("Terraform validation successful.")
-#             else:
-#                 print("Terraform validation failed:")
-#                 print(validate_process.stdout)
-#                 print(validate_process.stderr)
+            time.sleep(5)
+            apply_process = subprocess.run(['terraform', 'apply', '-auto-approve', '-input=false'], capture_output=True, text=True, check=False)  # nosec
+            time.sleep(5)
+            if apply_process.returncode == 0:
+                apply_output = apply_process.stdout
+                def remove_browser_ansi_escape_codes(text):
+                    """
+                        gets output of terraform apply
+                    """
+                    ansi_escape = re.compile(r'\x1b\[[0-9;]*[mK]')
+                    return ansi_escape.sub('', text)
 
-#             subprocess.run(['terraform', 'init', '-input=false', '-backend=false'], check=True)  # nosec
+                clean_apply_output = remove_browser_ansi_escape_codes(apply_output)
 
-#             time.sleep(5)
-#             apply_process = subprocess.run(['terraform', 'apply', '-auto-approve', '-input=false'], capture_output=True, text=True, shell=True, check=False)  # nosec
-#             if apply_process.returncode == 0:
-#                 apply_output = apply_process.stdout
-#                 def remove_browser_ansi_escape_codes(text):
-#                     """
-#                         gets output of terraform apply
-#                     """
-#                     ansi_escape = re.compile(r'\x1b\[[0-9;]*[mK]')
-#                     return ansi_escape.sub('', text)
+                # Define a re pattern to match the content after "0 destroyed.\n\nOutputs:\n\n"
+                BROWSER_PATTERN = r'0 destroyed\.\n\nOutputs:\n\n([\s\S]*)'
 
-#                 clean_apply_output = remove_browser_ansi_escape_codes(apply_output)
+                # Use re.search to find the matched content
+                match = re.search(BROWSER_PATTERN, clean_apply_output)
 
-#                 # Define a re pattern to match the content after "0 destroyed.\n\nOutputs:\n\n"
-#                 BROWSER_PATTERN = r'0 destroyed\.\n\nOutputs:\n\n([\s\S]*)'
+                if match:
+                    tf_outputs = match.group(1)
+                else:
+                    tf_outputs = "No tf_outputs found."
+                print(tf_outputs)
+            # Update the CSV based on the tf_outputs dictionary
+            update_browser_guids_csv(tf_outputs)
+            print("CSV updated with GUIDs.")
 
-#                 # Use re.search to find the matched content
-#                 match = re.search(BROWSER_PATTERN, clean_apply_output)
+            if os.path.exists('terraform.tfstate'):
+                os.remove('terraform.tfstate')
 
-#                 if match:
-#                     TF_OUTPUTS = match.group(1)
-#                 else:
-#                     TF_OUTPUTS = "No TF_OUTPUTS found."
-#                 print(TF_OUTPUTS)
-#             # Update the CSV based on the TF_OUTPUTS dictionary
-#             update_browser_guids_csv(TF_OUTPUTS)
-#             print("CSV updated with GUIDs.")
+            if os.path.exists('terraform.tfstate.backup'):
+                os.remove('terraform.tfstate.backup')
 
-#             if os.path.exists('terraform.tfstate'):
-#                 os.remove('terraform.tfstate')
+            if os.path.exists('data.tf'):
+                os.remove('data.tf')
 
-#             if os.path.exists('terraform.tfstate.backup'):
-#                 os.remove('terraform.tfstate.backup')
-
-#             if os.path.exists('data.tf'):
-#                 os.remove('data.tf')
-
-# else:
-#     print("data.csv file not found in the dynamic folder")
-
+else:
+    print("data.csv file not found in the dynamic folder")
+    
