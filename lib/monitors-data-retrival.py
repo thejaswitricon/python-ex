@@ -280,6 +280,9 @@ if os.path.exists(data_csv_file):
                 if os.path.exists('data.tf'):
                     os.remove('data.tf')
 
+                if os.path.exists('.terraform.lock.hcl'):
+                    os.remove('.terraform.lock.hcl')
+
             else:
                 print("No matching application names found")
 
@@ -446,6 +449,9 @@ if os.path.exists(data_csv_file):
 
             if os.path.exists('data.tf'):
                 os.remove('data.tf')
+
+            if os.path.exists('.terraform.lock.hcl'):
+                os.remove('.terraform.lock.hcl')
 
 else:
     print("data.csv file not found in the dynamic folder")
