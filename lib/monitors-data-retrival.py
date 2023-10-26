@@ -283,6 +283,9 @@ if os.path.exists(data_csv_file):
                 if os.path.exists('.terraform.lock.hcl'):
                     os.remove('.terraform.lock.hcl')
 
+                if os.path.exists('.terraform'):
+                    shutil.rmtree('.terraform')
+
             else:
                 print("No matching application names found")
 
@@ -452,6 +455,9 @@ if os.path.exists(data_csv_file):
 
             if os.path.exists('.terraform.lock.hcl'):
                 os.remove('.terraform.lock.hcl')
+
+            if os.path.exists('.terraform'):
+                shutil.rmtree('.terraform')
 
 else:
     print("data.csv file not found in the dynamic folder")
